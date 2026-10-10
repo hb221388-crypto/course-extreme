@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Course Extrême</title>
+
+<style>
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  background: #101820;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+
+header {
+  padding: 12px;
+  background: linear-gradient(90deg, #ff3d00, #ff9800);
+}
+
+h1 {
+  margin: 5px;
+  font-size: 27px;
+}
+
+#infos {
+  display: flex;
+  justify-content: space-around;
+  padding: 12px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+#jeu {
+  position: relative;
+  width: min(100%, 440px);
+  margin: auto;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #277b37;
+  border: 3px solid white;
+  border-radius: 8px;
+  touch-action: none;
+}
+
+#message {
+  position: absolute;
+  top: 35%;
+  left: 5%;
+  width: 90%;
+  padding: 18px;
+  background: rgba(0,0,0,.85);
+  border-radius: 15px;
+}
+
+#message h2 {
+  color: #ff9800;
+}
+
+button {
+  border: none;
+  border-radius: 12px;
+  padding: 14px 22px;
+  font-size: 18px;
+  font-weight: bold;
+  color: white;
+  background: #ff5722;
+  margin: 5px;
+}
+
+.commandes {
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+}
+
+.commandes button {
+  width: 125px;
+  background: #1769aa;
+  font-size: 24px;
+}
+
+small {
+  color: #ccc;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>🏁 COURSE EXTRÊME 🏁</h1>
+  <div>Évite les voitures et bats ton record !</div>
+</header>
+
+<div id="infos">
+  <span>🏆 Score : <b id="score">0</b></span>
+  <span>🚀 Vitesse : <b id="vitesse">1</b></span>
+</div>
+
+<div id="jeu">
+  <canvas id="canvas" width="400" height="600"></canvas>
+
+  <div id="message">
+    <h2>🏎️ COURSE EXTRÊME</h2>
+    <p>Évite les voitures rouges !</p>
+    <p>Utilise les boutons pour conduire.</p>
+    <button id="demarrer">JOUER</button>
+  </div>
+</div>
+
+<div class="commandes">
+  <button id="gauche">⬅ GAUCHE</button>
+  <button id="droite">DROITE ➡</button>
+</div>
+
+<p><small>Course Extrême — jeu gratuit</small></p>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const scoreTexte = document.getElementById("score");
+const vitesseTexte = document.getElementById("vitesse");
+const message = document.getElementById("message");
+const boutonJouer = document.getElementById("demarrer");
+
+const joueur = {
+  x: 175,
+  y: 475,
+  largeur: 50,
+  hauteur: 85,
+  couleur: "#00c8ff"
+};
+
+let obstacles = [];
+let score = 0;
+let vitesse = 4;
+let lignes = 0;
+let actif = false;
+let gauche = false;
+let droite = false;
+let dernierTemps = 0;
+let derniereCreation = 0;
+let animation = null;
+
+function voiture(x, y, largeur, hauteur, couleur) {
+  ctx.fillStyle = "#111";
+  ctx.fillRect(x + 5, y, largeur - 10, hauteur);
+
+  ctx.fillStyle = couleur;
+  ctx.fillRect(x, y + 10, largeur, hauteur - 20);
+
+  ctx.fillStyle = "#b9efff";
+  ctx.fillRect(x + 8, y + 15, largeur - 16, 17);
+
+  ctx.fillStyle = "#222";
+  ctx.fillRect(x + 8, y + 42, largeur - 16, 22);
+
+  ctx.fillStyle = "#fff59d";
+  ctx.fillRect(x + 5, y + hauteur - 27, 9, 7);
+  ctx.fillRect(x + largeur - 14, y + hauteur - 27, 9, 7);
+
+  ctx.fillStyle = "#111";
+  ctx.fillRect(x - 3, y + 17, 6, 18);
+  ctx.fillRect(x + largeur - 3, y + 17, 6, 18);
+  ctx.fillRect(x - 3, y + hauteur - 33, 6, 18);
+  ctx.fillRect(x + largeur - 3, y + hauteur - 33, 6, 18);
+}
+
+function dessinerRoute() {
+  ctx.fillStyle = "#287d36";
+  ctx.fillRect(0, 0, 400, 600);
+
+  ctx.fillStyle = "#333";
+  ctx.fillRect(40, 0, 320, 600);
+
+  ctx.fillStyle = "#eee";
+  ctx.fillRect(40, 0, 5, 600);
+  ctx.fillRect(355, 0, 5, 600);
+
+  ctx.fillStyle = "#ffcc00";
+
+  for (let y = -60 + lignes; y < 600; y += 100) {
+    ctx.fillRect(137, y, 6, 50);
+    ctx.fillRect(257, y, 6, 50);
+  }
+
+  lignes = (lignes + vitesse) % 100;
+}
+
+function creerObstacle() {
+  const voies = [65, 125, 185, 245, 295];
+  const x = voies[Math.floor(Math.random() * voies.length)];
+
+  obstacles.push({
+    x: x,
+    y: -100,
+    largeur: 45,
+    hauteur: 75,
+    couleur: ["#f44336", "#ff9800", "#e91e63"][
+      Math.floor(Math.random() * 3)
+    ]
+  });
+}
+
+function collision(a, b) {
+  return (
+    a.x + 8 < b.x + b.largeur - 6 &&
+    a.x + a.largeur - 8 > b.x + 6 &&
+    a.y + 12 < b.y + b.hauteur - 8 &&
+    a.y + a.hauteur - 12 > b.y + 8
+  );
+}
+
+function dessiner(temps) {
+  if (!actif) return;
+
+  const ecart = Math.min((temps - (dernierTemps || temps)) / 16.67, 2);
+  dernierTemps = temps;
+
+  dessinerRoute();
+
+  if (temps - derniereCreation > Math.max(400, 1050 - score * 2)) {
+    creerObstacle();
+    derniereCreation = temps;
+  }
+
+  if (gauche) joueur.x -= 5 * ecart;
+  if (droite) joueur.x += 5 * ecart;
+
+  joueur.x = Math.max(48, Math.min(302, joueur.x));
+
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const o = obstacles[i];
+    o.y += vitesse * ecart;
+
+    voiture(o.x, o.y, o.largeur, o.hauteur, o.couleur);
+
+    if (collision(joueur, o)) {
+      terminer();
+      return;
+    }
+
+    if (o.y > 620) {
+      obstacles.splice(i, 1);
+      score += 10;
+      scoreTexte.textContent = score;
+      vitesse = Math.min(11, 4 + score / 100);
+      vitesseTexte.textContent = Math.floor(vitesse);
+    }
+  }
+
+  voiture(
+    joueur.x,
+    joueur.y,
+    joueur.largeur,
+    joueur.hauteur,
+    joueur.couleur
+  );
+
+  animation = requestAnimationFrame(dessiner);
+}
+
+function demarrer() {
+  if (animation) cancelAnimationFrame(animation);
+
+  joueur.x = 175;
+  obstacles = [];
+  score = 0;
+  vitesse = 4;
+  lignes = 0;
+  dernierTemps = 0;
+  derniereCreation = 0;
+  actif = true;
+
+  scoreTexte.textContent = "0";
+  vitesseTexte.textContent = "4";
+  message.style.display = "none";
+
+  animation = requestAnimationFrame(dessiner);
+}
+
+function terminer() {
+  actif = false;
+
+  if (animation) cancelAnimationFrame(animation);
+
+  message.innerHTML = `
+    <h2>💥 GAME OVER !</h2>
+    <p>Ton score : ${score}</p>
+    <button onclick="demarrer()">REJOUER</button>
+  `;
+
+  message.style.display = "block";
+}
+
+function commande(bouton, direction) {
+  bouton.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    if (direction === "gauche") gauche = true;
+    else droite = true;
+  });
+
+  function arreter(e) {
+    if (direction === "gauche") gauche = false;
+    else droite = false;
+  }
+
+  bouton.addEventListener("pointerup", arreter);
+  bouton.addEventListener("pointercancel", arreter);
+  bouton.addEventListener("pointerleave", arreter);
+}
+
+commande(document.getElementById("gauche"), "gauche");
+commande(document.getElementById("droite"), "droite");
+
+boutonJouer.addEventListener("click", demarrer);
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft") gauche = true;
+  if (e.key === "ArrowRight") droite = true;
+});
+
+document.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft") gauche = false;
+  if (e.key === "ArrowRight") droite = false;
+});
+
+dessinerRoute();
+voiture(joueur.x, joueur.y, joueur.largeur, joueur.hauteur, joueur.couleur);
+</script>
+
+</body>
+</html>
